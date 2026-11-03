@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import PortfolioView from "./PortfolioView.jsx";
+import { isSupabaseConfigured, uploadPortfolioImage } from "../lib/supabase.js";
 
 const sectionTabs = [
   { id: "hero", label: "Karşılama" },
@@ -284,7 +285,7 @@ function AdminCollection({ collectionKey, items, onChange, onNotice }) {
   );
 }
 
-export default function AdminPanel({ data, onChange, onBack, onToggleTheme }) {
+export default function AdminPanel({ data, onChange, onBack, onToggleTheme, syncStatus }) {
   const [activeTab, setActiveTab] = useState("profile");
   const [profileDraft, setProfileDraft] = useState(data.profile);
   const [notice, setNotice] = useState("");
@@ -360,12 +361,14 @@ export default function AdminPanel({ data, onChange, onBack, onToggleTheme }) {
     }
 
     try {
-      const imageData = await readImageFile(file);
-      setProfileDraft((current) => ({ ...current, [field.key]: imageData }));
+      const imageSource = isSupabaseConfigured
+        ? await uploadPortfolioImage(file)
+        : await readImageFile(file);
+      setProfileDraft((current) => ({ ...current, [field.key]: imageSource }));
       showNotice(`${field.label} seçildi. Uygulamak için profil değişikliklerini kaydedin.`);
     } catch (error) {
       console.error(`${field.label} dosyası okunamadı:`, error);
-      showNotice(`${field.label} dosyası okunamadı. Lütfen başka bir dosya deneyin.`);
+      showNotice(`${field.label} yüklenemedi: ${error.message || "Lütfen tekrar deneyin."}`);
     }
   }
 
@@ -426,7 +429,14 @@ export default function AdminPanel({ data, onChange, onBack, onToggleTheme }) {
         <header className="admin-topbar">
           <div className="admin-breadcrumb"><span>Yönetim</span><span>/</span><strong>{activeTab === "profile" ? "Profil bilgileri" : activeTab === "appearance" ? "Tema & renkler" : activeSection?.label}</strong></div>
           <div className="admin-top-actions">
-            <span className="saved-indicator"><span className="status-dot" /> Değişiklikler otomatik kaydedilir</span>
+            <span className="saved-indicator"><span className="status-dot" />{
+              syncStatus === "syncing" ? "Buluta kaydediliyor"
+                : syncStatus === "synced" ? "Buluta kaydedildi"
+                  : syncStatus === "error" ? "Bulut kaydı başarısız"
+                    : syncStatus === "loading" ? "Bulut verisi yükleniyor"
+                      : syncStatus === "ready" ? "Bulut bağlantısı hazır"
+                        : "Bu tarayıcıya kaydediliyor"
+            }</span>
             <button className="icon-button theme-toggle" onClick={onToggleTheme} aria-label={data.appearance.theme === "light" ? "Koyu temaya geç" : "Aydınlık temaya geç"} title={data.appearance.theme === "light" ? "Koyu tema" : "Aydınlık tema"}>{data.appearance.theme === "light" ? <Moon size={16} /> : <Sun size={16} />}</button>
             <button className="button button-outline export-button" onClick={() => setExportOpen((open) => !open)}><Download size={15} /> JSON dışa aktar</button>
           </div>
@@ -643,7 +653,7 @@ export default function AdminPanel({ data, onChange, onBack, onToggleTheme }) {
               </aside>
             )}
           </div>
-          <div className="admin-footer-note"><span className="status-dot" /> Tüm düzenlemeler bu tarayıcıya otomatik kaydedilir.</div>
+          <div className="admin-footer-note"><span className="status-dot" />{isSupabaseConfigured ? "Değişiklikler Supabase hesabına kaydedilir ve tüm cihazlarda paylaşılır." : "Supabase ayarlanana kadar değişiklikler yalnızca bu tarayıcıya kaydedilir."}</div>
         </div>
       </main>
     </div>

@@ -1,10 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, LockKeyhole, ShieldAlert } from "lucide-react";
 import AdminPanel from "./components/AdminPanel.jsx";
 import PortfolioView from "./components/PortfolioView.jsx";
 import portfolioData, { STORAGE_KEY } from "./data/portfolioData.js";
-
-const ADMIN_PASSWORD_SHA256 = "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918";
+import {
+  isSupabaseAdminConfigured,
+  isSupabaseConfigured,
+  supabase,
+  supabaseAdminEmail,
+} from "./lib/supabase.js";
 
 function getRgbValue(hexColor) {
   if (!/^#[\da-f]{6}$/i.test(hexColor ?? "")) return null;
@@ -23,9 +27,18 @@ function getReadableButtonText(hexColor) {
   return luminance > 0.42 ? "#17201e" : "#ffffff";
 }
 
-async function hashPassword(password) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(password));
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+function isAdminUser(user) {
+  return user?.app_metadata?.role === "admin";
+}
+
+async function loadCloudPortfolio() {
+  const { data, error } = await supabase
+    .from("portfolio_content")
+    .select("data")
+    .eq("id", "main")
+    .maybeSingle();
+  if (error) throw error;
+  return data?.data ?? null;
 }
 
 function normalizePortfolioData(savedData) {
@@ -139,14 +152,61 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [storageError, setStorageError] = useState("");
+  const [syncError, setSyncError] = useState("");
+  const [syncStatus, setSyncStatus] = useState(isSupabaseConfigured ? "loading" : "local");
+  const [cloudReady, setCloudReady] = useState(!isSupabaseConfigured);
+  const [authUser, setAuthUser] = useState(null);
+  const saveQueue = useRef(Promise.resolve());
+  const saveSequence = useRef(0);
 
   useEffect(() => {
     function syncViewWithLocation() {
-      setView(window.location.pathname.replace(/\/+$/, "") === "/admin" ? "login" : "portfolio");
+      const isAdminPath = window.location.pathname.replace(/\/+$/, "") === "/admin";
+      setView(isAdminPath ? (isAdminUser(authUser) ? "admin" : "login") : "portfolio");
     }
 
     window.addEventListener("popstate", syncViewWithLocation);
     return () => window.removeEventListener("popstate", syncViewWithLocation);
+  }, [authUser]);
+
+  useEffect(() => {
+    if (!supabase) {
+      setCloudReady(true);
+      setSyncStatus("local");
+      return undefined;
+    }
+
+    let active = true;
+    async function initializeCloud() {
+      try {
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        const user = sessionData.session?.user;
+        if (active && isAdminUser(user)) {
+          setAuthUser(user);
+          if (window.location.pathname.replace(/\/+$/, "") === "/admin") setView("admin");
+        }
+
+        const cloudData = await loadCloudPortfolio();
+        if (!active) return;
+        if (cloudData) setData(normalizePortfolioData(cloudData));
+        setSyncStatus(cloudData ? "synced" : "ready");
+        setSyncError("");
+      } catch (error) {
+        console.error("Bulut portföy verisi yüklenemedi:", error);
+        if (active) {
+          setSyncStatus("error");
+          setSyncError("Bulut içeriği yüklenemedi. Bu cihazdaki kayıt gösteriliyor.");
+        }
+      } finally {
+        if (active) setCloudReady(true);
+      }
+    }
+
+    initializeCloud();
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -160,6 +220,34 @@ export default function App() {
       );
     }
   }, [data]);
+
+  useEffect(() => {
+    if (!supabase || !cloudReady || !isAdminUser(authUser)) return undefined;
+
+    const sequence = ++saveSequence.current;
+    const timer = window.setTimeout(() => {
+      setSyncStatus("syncing");
+      setSyncError("");
+      saveQueue.current = saveQueue.current
+        .catch(() => {})
+        .then(async () => {
+          const { error } = await supabase
+            .from("portfolio_content")
+            .upsert({ id: "main", data, updated_at: new Date().toISOString() });
+          if (error) throw error;
+          if (sequence === saveSequence.current) setSyncStatus("synced");
+        })
+        .catch((error) => {
+          console.error("Bulut portföy verisi kaydedilemedi:", error);
+          if (sequence === saveSequence.current) {
+            setSyncStatus("error");
+            setSyncError("Değişiklikler buluta kaydedilemedi. Bağlantı ve Supabase izinlerini kontrol edin.");
+          }
+        });
+    }, 450);
+
+    return () => window.clearTimeout(timer);
+  }, [data, cloudReady, authUser]);
 
   useEffect(() => {
     document.title = `${data.profile.name} — ${data.profile.title}`;
@@ -216,14 +304,36 @@ export default function App() {
 
   async function signIn(event) {
     event.preventDefault();
+    if (!isSupabaseAdminConfigured) {
+      setLoginError("Yönetici girişi için Supabase bağlantısı ve yönetici hesabı e-postası ayarlanmalıdır.");
+      return;
+    }
     try {
-      if (await hashPassword(password) !== ADMIN_PASSWORD_SHA256) {
-        setLoginError("Parola hatalı. Tekrar deneyin.");
+      const { data: authData, error } = await supabase.auth.signInWithPassword({
+        email: supabaseAdminEmail,
+        password,
+      });
+      if (error) throw error;
+      if (!isAdminUser(authData.user)) {
+        await supabase.auth.signOut();
+        setLoginError("Bu hesap yönetici yetkisine sahip değil.");
         return;
       }
+
+      setAuthUser(authData.user);
+      try {
+        const cloudData = await loadCloudPortfolio();
+        if (cloudData) setData(normalizePortfolioData(cloudData));
+        setSyncError("");
+        setSyncStatus(cloudData ? "synced" : "ready");
+      } catch (error) {
+        console.error("Bulut portföy verisi giriş sırasında yüklenemedi:", error);
+        setSyncStatus("error");
+        setSyncError("Bulut içeriği yüklenemedi. Bu cihazdaki kayıtla devam ediliyor.");
+      }
     } catch (error) {
-      console.error("Yönetici parolası doğrulanamadı:", error);
-      setLoginError("Parola doğrulaması başarısız oldu. Güvenli bağlantı kullanın.");
+      console.error("Yönetici girişi başarısız oldu:", error);
+      setLoginError(error.message || "Giriş başarısız oldu. E-posta ve parolanızı kontrol edin.");
       return;
     }
     setLoginError("");
@@ -235,7 +345,7 @@ export default function App() {
     if (window.location.pathname.replace(/\/+$/, "") !== "/admin") {
       window.history.pushState(null, "", "/admin");
     }
-    setView("login");
+    setView(isAdminUser(authUser) ? "admin" : "login");
   }
 
   function leaveAdmin() {
@@ -250,6 +360,7 @@ export default function App() {
           data={data}
           onChange={setData}
           onBack={leaveAdmin}
+          syncStatus={syncStatus}
           onToggleTheme={() => setData((current) => ({
             ...current,
             appearance: {
@@ -259,6 +370,7 @@ export default function App() {
           }))}
         />
         {storageError && <div className="storage-alert">{storageError}</div>}
+        {syncError && <div className="storage-alert">{syncError}</div>}
       </>
     );
   }
@@ -273,22 +385,27 @@ export default function App() {
           <div className="login-icon"><LockKeyhole size={21} /></div>
           <p className="eyebrow">YÖNETİCİ ALANI</p>
           <h1>Tekrar hoş geldin.</h1>
-          <p className="login-copy">Portföyünü düzenlemek için parolanı gir.</p>
+          <p className="login-copy">Portföyünü düzenlemek için yönetici hesabınla giriş yap.</p>
+          {!isSupabaseAdminConfigured && (
+            <p className="form-error"><ShieldAlert size={14} /> Supabase bağlantı ayarları yapılmadı; yönetici girişi kullanılamıyor.</p>
+          )}
           <label className="field-label" htmlFor="admin-password">Parola</label>
           <input
             autoFocus
             id="admin-password"
             className="text-input"
             type="password"
+            autoComplete="current-password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            placeholder="Yönetici parolası"
+            placeholder="Yönetici parolanız"
+            required
           />
           {loginError && <p className="form-error">{loginError}</p>}
-          <button className="button button-primary login-submit" type="submit">
+          <button className="button button-primary login-submit" type="submit" disabled={!isSupabaseAdminConfigured}>
             Yönetim paneline gir <ArrowLeft className="arrow-forward" size={16} />
           </button>
-          <div className="security-note"><ShieldAlert size={14} /> Varsayılan parola: admin</div>
+          <div className="security-note"><ShieldAlert size={14} /> Yönetici hesabı Supabase Auth üzerinden doğrulanır.</div>
         </form>
       </main>
     );
@@ -308,6 +425,7 @@ export default function App() {
         }))}
       />
       {storageError && <div className="storage-alert">{storageError}</div>}
+      {syncError && <div className="storage-alert">{syncError}</div>}
     </>
   );
 }
