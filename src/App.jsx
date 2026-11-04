@@ -74,6 +74,9 @@ function normalizePortfolioData(savedData) {
     ),
   };
   normalized.contentRevision = Number(saved.contentRevision) || 0;
+  if (normalized.sections.hero.visualCaption === "SÜREKLİ ÖĞRENME VE GELİŞİM") {
+    normalized.sections.hero.visualCaption = "";
+  }
 
   for (const key of collectionKeys) {
     const savedItems = Array.isArray(saved[key]) ? saved[key] : portfolioData[key];

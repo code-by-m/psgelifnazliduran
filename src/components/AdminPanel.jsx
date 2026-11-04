@@ -92,7 +92,10 @@ const sectionFields = {
     { key: "meta", label: "Başlık altındaki kısa metin" },
     { key: "primaryCta", label: "Randevu düğmesi metni" },
     { key: "secondaryCta", label: "İkincil düğme metni" },
-    { key: "visualCaption", label: "Profil fotoğrafı altındaki kısa ifade" },
+    { key: "visualCaption", label: "Fotoğraf kartı başlığı (alt sağ)" },
+    { key: "visualDescription", label: "Fotoğraf kartı açıklaması (alt sağ)", type: "textarea" },
+    { key: "visualSecondaryCaption", label: "İkinci kart başlığı (üst sol)" },
+    { key: "visualSecondaryDescription", label: "İkinci kart açıklaması (üst sol)", type: "textarea" },
     { key: "visualEnabled", label: "Profil görselini göster", type: "checkbox" },
   ],
   about: [

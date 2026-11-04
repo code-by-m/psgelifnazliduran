@@ -150,7 +150,24 @@ export default function PortfolioView({ data, onAdmin, onToggleTheme, previewSec
                       <Heart className="portrait-heart" size={23} />
                     </div>
                   )}
-                  <div className="portrait-note"><span className="note-icon"><ShieldCheck size={17} /></span><span>{sections.hero.visualCaption}<small>Güvenli ve yargısız bir görüşme alanı</small></span></div>
+                  {(sections.hero.visualCaption?.trim() || sections.hero.visualDescription?.trim()) && (
+                    <div className="portrait-note">
+                      <span className="note-icon"><ShieldCheck size={15} /></span>
+                      <span>
+                        {sections.hero.visualCaption?.trim() && <strong>{sections.hero.visualCaption}</strong>}
+                        {sections.hero.visualDescription?.trim() && <small>{sections.hero.visualDescription}</small>}
+                      </span>
+                    </div>
+                  )}
+                  {(sections.hero.visualSecondaryCaption?.trim() || sections.hero.visualSecondaryDescription?.trim()) && (
+                    <div className="portrait-note portrait-note-secondary">
+                      <span className="note-icon"><Heart size={15} /></span>
+                      <span>
+                        {sections.hero.visualSecondaryCaption?.trim() && <strong>{sections.hero.visualSecondaryCaption}</strong>}
+                        {sections.hero.visualSecondaryDescription?.trim() && <small>{sections.hero.visualSecondaryDescription}</small>}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <span className="visual-decoration visual-decoration-one" />
                 <span className="visual-decoration visual-decoration-two" />

@@ -1083,6 +1083,36 @@ body { background: var(--bg); color: var(--text); font-family: "DM Sans", sans-s
 .social-editor-row .text-input { min-width: 0; }
 .social-remove-button { width: 32px; height: 40px; }
 .social-editor-empty { margin: 0 0 13px; color: #788485; font-size: 10px; }
+
+.portrait-note {
+  right: -66px;
+  bottom: 12px;
+  width: min(205px, 70vw);
+  min-width: 0;
+  padding: 9px 11px;
+  gap: 9px;
+  font-size: 9px;
+  line-height: 1.4;
+}
+.portrait-note > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.portrait-note strong { display: block; }
+.portrait-note small { font-size: 8px; line-height: 1.4; }
+.portrait-note .note-icon { width: 29px; height: 29px; flex: 0 0 auto; }
+.portrait-note-secondary {
+  top: 38px;
+  right: auto;
+  bottom: auto;
+  left: -54px;
+  width: min(190px, 66vw);
+}
+.portfolio-section-preview .portrait-note { right: -50px; width: min(180px, 65vw); min-width: 0; }
+.portfolio-section-preview .portrait-note-secondary { right: auto; left: -34px; }
+@media (max-width: 700px) {
+  .portrait-note { right: -14px; bottom: 12px; width: min(195px, 70%); }
+  .portrait-note-secondary { top: 30px; right: auto; bottom: auto; left: -12px; width: min(180px, 68%); }
+  .portfolio-section-preview .portrait-note { right: -8px; }
+  .portfolio-section-preview .portrait-note-secondary { right: auto; left: -8px; }
+}
 html[data-theme="light"] .social-editor-empty { color: #718080; }
 @media (max-width: 620px) {
   .social-editor-row { grid-template-columns: minmax(0, 1fr) 32px; }

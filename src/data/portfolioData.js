@@ -45,7 +45,10 @@ const portfolioData = {
       primaryCta: "İletişime geç",
       secondaryCta: "Eğitim ve deneyim",
       visualEnabled: true,
-      visualCaption: "SÜREKLİ ÖĞRENME VE GELİŞİM",
+      visualCaption: "",
+      visualDescription: "",
+      visualSecondaryCaption: "",
+      visualSecondaryDescription: "",
     },
     about: {
       enabled: true,
