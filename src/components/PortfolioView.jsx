@@ -99,8 +99,15 @@ export default function PortfolioView({ data, onAdmin, onToggleTheme, previewSec
             </nav>
           )}
           <div className="header-utilities">
-            <a className="availability" href={bookingUrl || "#contact"}>
-              <span className="status-dot" /> {profile.availability}
+            <a
+              className="availability"
+              href={bookingUrl || "#contact"}
+              aria-label={profile.availability || "İletişim"}
+              title={profile.availability}
+            >
+              <span className="status-dot" />
+              <span className="availability-label">{profile.availability}</span>
+              <span className="availability-mobile-label" aria-hidden="true">İletişim</span>
             </a>
             <button
               className="theme-toggle public-theme-toggle"
